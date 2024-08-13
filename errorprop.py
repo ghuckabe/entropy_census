@@ -180,6 +180,8 @@ s_bh0=1.6*10**(17)*kb #Egan and Lineweaver 2009
 s_bh[l-1]=s_bh0
 s_bhhigh=np.zeros(l)
 s_bhlow=np.zeros(l)
+s_bh_err=np.zeros(l)
+s_bh_sicilia=np.zeros(l)
 
 eps_dm=np.zeros(l) #Dark matter
 eps_dm0=eps_c0*om_dm0
@@ -264,36 +266,86 @@ def prog2rem(m): #Progenitor mass to remnant mass, function approximated from pl
 def imf(m): #Initial mass function, redshift independent, m in msol
     if m<0.5:
         alpha=-1.35
+        x_err=0.5
+    elif m<1:
+        alpha=-2.35
+        x_err=0.3
     else:
         alpha=-2.35
-    return m**(alpha+1) #multiply by dlogM to return value proportional to dn
+        x_err=0.7
+    return m**(alpha+1), x_err*m**(alpha+1)*np.log(1/m) #dn/dlogM, error of dn/dlogM
 
 def imfhigh(m): #Initial mass function, redshift independent, m in msol
     if m<0.5:
-        alpha=-1.35
+        alpha=-(1.35+0.5) #pm 0.5
+    elif m<1:
+        alpha=-(2.35-0.3) #pm 0.3
     else:
-        alpha=-2.35+0.65
+        alpha=-(2.35-0.7) #pm 0.7
     return m**(alpha+1) #multiply by dlogM to return value proportional to dn in 
 
 def imflow(m): #initial mass function redshift independent, m in msol
     if m<0.5:
-        alpha=-1.35
+        alpha=-(1.35-0.5)
+    elif m<1:
+        alpha=-(2.35+0.3)
     else:
-        alpha=-2.35-0.35
+        alpha=-(2.35+0.7)
     return m**(alpha+1) #multiply by dlogM to get proportional to dn
+
+#Reproduce Fig 14 in Sicilia 2022 to check functions (and check log vs ln)
+# z_scale=np.array([0,1,2,4,6,8,10])
+# fit_n_array=np.exp(mpc**(-3)*np.array([5.623, 5.429, 5.107, 4.344, 3.614, 2.894, 2.305])) #Mpc^-3
+# fit_m_array=np.exp(msol*np.array([0.607, 0.609, 0.612, 0.634, 0.659, 0.676, 0.680]))
+# alpha_array=np.array([-3.781, -3.859, -3.914, -3.902, -3.866, -3.868, -3.884])
+# fit_ng_array=np.exp(mpc**(-3)*np.array([2.413, 2.309, 2.064, 1.419, 0.806, 0.197, -0.344]))
+# fit_mG_array=np.exp(msol*np.array([2.021, 2.023, 2.024, 2.037, 2.054, 2.066, 2.072]))
+# sigma_G_array=np.array([0.052, 0.051, 0.051, 0.049, 0.045, 0.043, 0.042])
+
+z_scale=np.array([0,1,2,4,6,8,10])
+fit_n_array=10**(np.array([5.623, 5.429, 5.107, 4.344, 3.614, 2.894, 2.305])) #Mpc^-3
+fit_m_array=10**(np.array([0.607, 0.609, 0.612, 0.634, 0.659, 0.676, 0.680]))
+alpha_array=np.array([-3.781, -3.859, -3.914, -3.902, -3.866, -3.868, -3.884])
+fit_ng_array=10**(np.array([2.413, 2.309, 2.064, 1.419, 0.806, 0.197, -0.344]))
+fit_mG_array=10**(np.array([2.021, 2.023, 2.024, 2.037, 2.054, 2.066, 2.072]))
+sigma_G_array=np.array([0.052, 0.051, 0.051, 0.049, 0.045, 0.043, 0.042])
+
+def dn_sicilia(m, z): #m in msol, z is redshift
+    #m=m*msol
+    fit_n=np.interp(z, z_scale, fit_n_array)
+    fit_m=np.interp(z,z_scale, fit_m_array)
+    alpha=np.interp(z,z_scale, alpha_array)
+    fit_ng=np.interp(z,z_scale, fit_ng_array)
+    fit_mG=np.interp(z,z_scale, fit_mG_array)
+    sigma_G=np.interp(z,z_scale, sigma_G_array)
+    # fit_n=fit_n_array[0]
+    # fit_m=fit_m_array[0]
+    # alpha=alpha_array[0]
+    # fit_ng=fit_ng_array[0]
+    # fit_mG=fit_mG_array[0]
+    # sigma_G=sigma_G_array[0]
+    return mpc**(-3)*(fit_n*(m/fit_m)**(1-alpha)*np.exp(-m/fit_m)+fit_ng*np.exp(-((np.log(m)-np.log(fit_mG))**2)/(2*sigma_G**2))/np.sqrt(2*np.pi*sigma_G**2))#multiply by dlogM to get dn
+
+
+mtest=np.logspace(0.8, 2.3, num=1000)
+yz0=dn_sicilia(mtest, 5)
+figt, axt = plt.subplots(1,1)
+axt.scatter(np.log10(mtest), np.log10(yz0))
+#axt.set_ylim(-3,7)
+axt.set_xlim(0.8, 2.3)
 
 def norm(epsstr): #normalization constant between rho_str(z)*1 million yrs (1 star formation event) and imf/pmf integral
     sol=1.70939 #Integrated in Mathematica from 0 msol to 300 msol
     a=epsstr/(sol*msol*c**2)
-    return a
+    return a #1/volume
 
 def normhigh(epsstr):
-    solhigh=7.13364 #from +0.65
+    solhigh=3.08867 #from +--
     ahigh=epsstr/(solhigh*msol*c**2) 
     return ahigh
 
 def normlow(epsstr):
-    sollow=1.29284 #from -0.35
+    sollow=1.18153 #from -++
     alow=epsstr/(sollow*msol*c**2)
     return alow
 
@@ -524,6 +576,10 @@ z20=np.argmin(abs(1./a-21))
 z30=np.argmin(abs(1./a-31))
 for zed in np.arange(z30,l):
     eps_str[zed]=eps_str[zed-1]+strdot(hub[zed-1])*h*a[zed-1]*c**2
+    print(strdot(hub[zed-1])*h*a[zed-1]*c**2)
+
+dentestarray=np.zeros(l)
+densiciliatestarray=np.zeros(l)
 
 #Stellar mass black hole number density tracking, typically at 8.05E+97
 mstart=10**(1.3-((2-1.3)/1000))
@@ -531,9 +587,15 @@ mstart=10**(1.398-((2-1.3)/1000)) #start at M=25 Msol, s=8.05e+97 mstart has neg
 for i in np.arange(z30,l-1):
     for m in np.logspace(1.398, 2, num=1000):
         mstep=(m-mstart)/(m*np.log(10)) #dlogM
-        den=norm(eps_str[i])*imf(m)*mstep #dn - number density of progenitors between mass M and M+dM
-        denhigh=normhigh(eps_str[i])*imfhigh(m)*mstep
-        denlow=normlow(eps_str[i])*imflow(m)*mstep
+        epsstr_step=strdot(hub[i])*h*a[i]*c**2
+        den, den_err=norm(epsstr_step)*imf(m)[0]*mstep, norm(epsstr_step)*imf(m)[1]*mstep #dn, dn_err - number density of progenitors between mass M and M+dM
+        #den, den_err=norm(eps_str[i])*imf(m)[0]*mstep, norm(eps_str[i])*imf(m)[1]*mstep #dn, dn_err - number density of progenitors between mass M and M+dM
+        denhigh=normhigh(epsstr_step)*imfhigh(m)*mstep
+        denlow=normlow(epsstr_step)*imflow(m)*mstep
+        z=1/a[i]-1
+        if z<=10:
+            den_sicilia=dn_sicilia(m,z)*mstep
+            densiciliatestarray[i]=den_sicilia
         #a*deta=dt
         #t=int from a[i] to a[i+steps] of a*deta
         intg=a[i]*h
@@ -542,10 +604,15 @@ for i in np.arange(z30,l-1):
             intg+=a[i+steps]*h
             steps+=1
         if (i+steps)<l:
-            s_bh[i+steps]+=den*(4*np.pi*kb*G/(c*hbar))*(prog2rem(m)*msol)**2
+            s_bh[i+steps:]+=den*(4*np.pi*kb*G/(c*hbar))*(prog2rem(m)*msol)**2
+            if z<=10:
+                s_bh_sicilia[i+steps]+=den_sicilia*(4*np.pi*kb*G/(c*hbar))*(prog2rem(m)*msol)**2
+ #           s_bh_err[i+steps]+=np.sqrt((4*np.pi*k_b*G/(c*hbar))**2*(den_err**2*(prog2rem(m)*msol)**2+()))
             s_bhhigh[i+steps]+=denhigh*(4*np.pi*kb*G/(c*hbar))*(prog2rem(m)*msol)**2
             s_bhlow[i+steps]+=denlow*(4*np.pi*kb*G/(c*hbar))*(prog2rem(m)*msol)**2
         mstart=m
+
+s_bh_sicilia=np.array(s_bh_sicilia)
 
 z=[10, 8, 6, 4, 2, 1, 0]
 zarg=np.arange(len(z))
@@ -2164,6 +2231,7 @@ ax17.fill_between(np.log10(totala), np.log10(totala**3*early_pbh0), np.log10(tot
 ax17.plot(np.log10(totala), np.log10(totala**3*early_pbh2), label="Largest PBH (f=0.3)")
 ax17.plot(np.log10(totala), np.log10(totala**3*early_pbh4), label=r"Evaporating PBH ($M=5\times 10^{-20} M_{\odot}$)")
 ax17.plot(np.log10(totala), np.log10(totala**3*hawking4), label="Hawking Radiation", c='#FF00FF', linestyle='dashed')
+ax17.plot(np.log10(totala), np.log10(totala**3*np.concatenate((np.zeros(early_length),s_bh_sicilia))))
 ax17.axvline(x=np.log10(1/(1+zeq)), c='#000000', linestyle='dotted', label=r'Matter-Radiation Equality')
 ax17.axvline(x=np.log10(1/(1+zrec)), c='#8B1EB3', linestyle='dotted', label=r'Recombination')
 ax17.axvline(x=np.log10(1/(1+zdec)), c='#EE4266', linestyle='dotted', label=r'Decoupling')
