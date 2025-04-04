@@ -12,7 +12,7 @@ Created on Tue Aug 13 12:07:16 2024
 import numpy as np
 
 #Numerical integration parameters
-h=1e14#step size in eta, da=sqrt(8*pi*G*eps/3)*a^2*d(eta) from 1.70 Mukhanov
+h=1e14#step size in eta (AKA d(eta)), da=sqrt(8*pi*G*eps/3)*a^2*d(eta) from 1.70 Mukhanov
 l=100000-86181#4830-224 #array size
 
 #Conversion factors

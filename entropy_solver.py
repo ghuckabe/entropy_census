@@ -82,7 +82,8 @@ s_smbhmf=[]
 decoupling_index=0
 
 print("Scale factor:")
-
+timecheck = [0]*c.l
+timecheck[-1] = c.t0
 stop=0
 switch=False
 for i in np.arange(2,c.l+1):
@@ -124,7 +125,7 @@ for i in np.arange(2,c.l+1):
         late.time[-i]=late.time[-i+1]*(late.a[-i]/late.a[-i+1])**(3./2.)
     else:
         late.time[-i]=(np.log(late.a[-i]/late.a[-i+1])+late.hub[-i+1]*late.time[-i+1])/late.hub[-i] #Assume H=a'/a^2
-        
+    timecheck[-i] = timecheck[-i+1]-late.a[-i]*c.h
     #comp=32*sigmat*sigmasb*a[l-i+1]*(t_cmb[l-i+1]**4)*xe*(t_bm[l-i+1]-t_cmb[l-i+1])/(3*hub[l-i+1]*me*(c**2)*(1+xe+xhe)*np.sqrt(8*np.pi*G*eps[l-i+1]/3))
     
     #Temperatures
@@ -195,8 +196,10 @@ bhsteps = 100 #Resolution of stellar mass BH IMF function
 
 starmass = np.logspace(np.log10(0.179), np.log10(31), num=starsteps) #masses for stellar IMF in msol
 progmass = np.logspace(np.log10(25), 100, num=bhsteps) # masses for BH progenitor IMF in msol
+pmf = {i:{mass:0 for mass in starmass} for i in range(z30, c.l-1)} #dict of present-day mass function of stars at time i, in format pmf[i][mass] = number density
+
 mstart=10**(1.398-((2-1.3)/bhsteps)) #start at M=25 Msol, s=8.05e+97 mstart has negligible change, most comes from high mass BHs
-#Stellar mass black hole number density tracking, typically at 8.05E+97
+#Star + stellar mass BH tracking
 for i in np.arange(z30,c.l-1):
     late.eps_str[i]=late.eps_str[i-1]+st.strdot(late.hub[i-1])*c.h*late.a[i-1]*c.c**2
     if (i-z30)%((c.l-z30)//10)==0:
@@ -207,7 +210,10 @@ for i in np.arange(z30,c.l-1):
         m = starmass[j]
         mstep = (starmass[j+1]-starmass[j-1])/(2*m*np.log(10)) #dlogM
         dn, dn_err = normalization*st.imf(m)[0]*mstep, normalization*st.imf(m)[1]*mstep
-        late.s_str[i]+=st.entropyrate(m)*late.a[i]*c.h*dn #(ds(m)/dt)*dt*dn(m)
+        for tm in range(i, endlife(i, m, late.time)): #adds stars of mass m produced in timestep i to pmf until timestep of star death
+            pmf[tm][m] += dn
+    for massstep in pmf[i]: #adds entropy contribution of all stars present at time i
+        late.s_str[i]+=st.entropyrate(massstep)*late.a[i]*c.h*pmf[i][massstep] #(ds(m)/dt)*dt*dn(m)
     for j in range(1,bhsteps-1): #BH progenitor IMF
         m = starmass[j]
         mstep = (starmass[j+1]-starmass[j-1])/(2*m*np.log(10)) #dlogM

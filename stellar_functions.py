@@ -20,8 +20,11 @@ def strdot(h): #Time derivative of stellar mass density, h is Hubble constant in
     sol=c.strdot0*x**2/(1+0.012*(x-1)**3*np.exp(0.041*x**(7./4.))) #Hernquist & Springel
     return sol #d(rho)/dt in (kg/m^3)/s
 
-def imf(m): #Initial mass function, redshift independent, m in msol
-    if m<0.5:
+def imf(m): #Kroupa 2001 initial mass function, redshift independent, m in msol
+    if m<0.08:
+        print("Mass is too small for sustainable fusion")
+        return 0, 0
+    elif m<0.5:
         alpha=-1.35
         x_err=0.5
     elif m<1:
@@ -33,15 +36,28 @@ def imf(m): #Initial mass function, redshift independent, m in msol
     return m**(alpha+1), x_err*m**(alpha+1)*np.log(1/m) #dn/dlogM, error of dn/dlogM
 
 def norm(epsstr): #normalization constant between rho_str(z)*1 million yrs (1 star formation event) and imf/pmf integral
-    sol=1.70939 #Integrated in Mathematica from 0 msol to 300 msol
+    sol=1.56119 #Integrated in Mathematica from 0 msol to 300 msol
     a=epsstr/(sol*c.msol*c.c**2)
     return a #1/volume
 
-#Stellar mass (in Msol) to lifetime
+#Stellar mass (in Msol) to lifetime in years
 def tstar(m):
     #sol=10**(10)*m**(-2.5)
-    sol=10**(10.015-3.461*np.log10(m)+0.8157*(np.log10(m)**2)) #elmegreen 2007 paper, eq2
-    return sol
+    sol=10**(10.015-3.461*np.log10(m)+0.8157*(np.log10(m)**2)) #Reid pg 2732
+    return sol #years
+
+def endlife(current, m, time): #binary search to find index right after star death
+    l, r = current, c.l-1
+    target = time[current]+tstar(m)*c.yr #time of stellar death
+    mid = (l+r)//2
+    while l<r:
+        if time[mid]<target:
+            l=mid+1
+        elif time[mid]>target:
+            r=mid
+        else: #in unlikely scenario where time[mid] exactly equals time of death
+            return mid
+    return l
 
 def luminosity(m): #m in msol
     if 0.179<m<=0.45:
@@ -62,14 +78,14 @@ def luminosity(m): #m in msol
 def temp(m): #m in msol
     if m<=1.5: #only reliable down to m=0.179
         R = (0.438*m**2+0.479*m+0.075)*rsol
-        logT = luminosity(m)*lsol/(4*np.pi*R**2*sigmasb)**(1./4.)
+        logT = luminosity(m)*c.lsol/(4*np.pi*R**2*c.sigmasb)**(1./4.)
     else: #only reliable up to m=31
         logT = -0.170*np.log10(m)**2+0.888*np.log10(m)+3.671
     T = 10**(logT)
     return T #K
 
 def entropyrate(m): #time derivative of entropy for one star of mass m
-    return luminosity(m)*lsol/temp(m) #proportional to ds/dt
+    return luminosity(m)*c.lsol/temp(m) #proportional to ds/dt
 
 """
 s per timestep = number density of stars of mass m*(ds(m)/dt)*dt
