@@ -11,10 +11,10 @@ Created on Tue Aug 13 15:12:11 2024
 import constants as c
 import numpy as np
 
-ginf=1.43728 #Does Ginf need a conversion?  Seems dimensionless
-xi2=10**(-17) #matter mass per photon (?) squared in 1/msol
-rho_l=1.25e-123 #dark energy density in planck density
-zeq=2740 #redshift of matter-radiation equality
+ginf=1.43728 #Dimensionless quantity
+xi2=1e-16 #Matter mass per photon squared in 1/msol, ~Inverse of horizon mass at matter-radiation equality
+rho_l=1.25e-123 #Dark energy density in Planck units
+zeq=2740 #Redshift of matter-radiation equality
 xeq=c.om_l*(1+zeq)**(-3)/(c.om_bm0+c.om_dm0) #? this is rho_l/rho_m for rho_m at equality, see anthony's paper w max and frank
 al=3215 #A_Lambda
 q=2e-5 #Scalar fluctuation amplitude on horizon

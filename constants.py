@@ -11,9 +11,13 @@ Created on Tue Aug 13 12:07:16 2024
 
 import numpy as np
 
+#Numerical integration parameters
+h=1e14#step size in eta, da=sqrt(8*pi*G*eps/3)*a^2*d(eta) from 1.70 Mukhanov
+l=100000-86181#4830-224 #array size
 
 #Conversion factors
 msol=1.9891e30 #Solar mass, kg, IAU
+lsol=382.2*10e24 #J/s, NASA
 au=149597870700 #AU, m, IAU
 ly=9460730472580800 #Lightyear in m, IAU
 mpc=au*10**6/((1/60)*(1/60)*2*np.pi/360) #mpc, m, IAU

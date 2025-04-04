@@ -13,9 +13,13 @@ from matplotlib import pyplot as plt
 import scipy.integrate as integrate
 import constants as c
 import stellarbh_functions as bh
+import stellar_functions as st
 import smbh_functions as smbh
 import early_functions as early
 import early_arrays as ea
+import h5py
+import os
+import late_arrays as late
 
 plt.rcParams['text.usetex']=False
 plt.rcParams['font.family']='serif'
@@ -23,137 +27,6 @@ plt.rcParams['font.serif']='Times New Roman'
 plt.rcParams.update({'font.size': 22})
 plt.rc('legend', fontsize=12)
 
-#Numerical integration parameters
-h=1e14#step size in eta, da=sqrt(8*pi*G*eps/3)*a^2*d(eta) from 1.70 Mukhanov
-l=100000-86181#4830-224 #array size
-
-#%%
-"""
-Initialize arrays for scale factor, energy density, entropy density, temperature
-"""
-
-time=np.zeros(l) #Cosmic time
-time[-1]=c.t0
-
-eta=np.zeros(l) #Conformal time
-eta[-1]=c.eta0
-
-a=np.zeros(l) #Scale factor
-a[-1]=1
-a_ceharg=2982
-
-hub=np.zeros(l) #Hubble constant
-hub[-1]=c.h0
-
-r_p=np.zeros(l) #Particle Horizon (Observable Universe)
-r_p[-1]=c.eta0*c.c
-
-volume=np.zeros(l) #Volume uses particle horizon
-volume[-1]=4*np.pi*(r_p[-1])**3/3
-
-r_ceh=np.zeros(l) #Radius of Cosmic Event Horizon
-r_ceh[-1]=c.c*(c.etainf-c.eta0)
-r_ceh_h=np.zeros(l) #Radius of Cosmic Event Horizon
-r_ceh_h[-1]=c.c*(c.etainf_h-c.eta0_h)
-r_ceh_l=np.zeros(l) #Radius of Cosmic Event Horizon
-r_ceh_l[-1]=c.c*(c.etainf_l-c.eta0_l)
-
-volumeceh=np.zeros(l) #Volume calculated with CEH
-volumeceh[-1]=4*np.pi*(r_ceh[-1])**3/3
-volumeceh_h=np.zeros(l)
-volumeceh_h[-1]=4*np.pi*(r_ceh_h[-1])**3/3
-volumeceh_l=np.zeros(l)
-volumeceh_l[-1]=4*np.pi*(r_ceh_l[-1])**3/3
-
-s_ceh=np.zeros(l)
-stot_ceh=np.zeros(l)
-s_ceh[-1]=(r_ceh[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh[-1]
-stot_ceh[-1]=(r_ceh[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-s_ceh_h=np.zeros(l)
-stot_ceh_h=np.zeros(l)
-s_ceh_h[-1]=(r_ceh_h[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh_h[-1]
-stot_ceh_h[-1]=(r_ceh_h[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-s_ceh_l=np.zeros(l)
-stot_ceh_l=np.zeros(l)
-s_ceh_l[-1]=(r_ceh_l[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh_l[-1]
-stot_ceh_l[-1]=(r_ceh_l[-1]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-
-eps_bm=np.zeros(l) #Baryons
-eps_bm0=c.eps_c0*c.om_bm0
-eps_bm[-1]=eps_bm0
-t_bm=np.zeros(l)
-t_bm[-1]=0.025468041207723818 #This came from old ASU code from Judd Bowman?
-s_bm=np.zeros(l)
-
-#Eagle data
-bm_eagleresults=[148.4053081304242, 84.3039732671589, 418.17238398806165, 853.2427715295006, 1572.864365719125, 1810.0005155900126, 1759.1301851009557, 2699.516883529645, 2110.990845022963, 2226.961377352639, 3126.284474107758, 4430.343761110442, 6127.405729410453, 4862.621531291029, 7113.963501171243, 8153.852287086782, 6080.247274201631, 8615.433172615767, 1927.9765390416364, 8000.553030185015, 1305.644296343521, 2968.6629285091212, 824.4928913315442, 1269.6081292868707, 464.85246944704045, 280.57777072388836, 233.8795437672676, 232.7706791309389, 235.5692882942148]
-bmz=np.array([0.00, 0.10, 0.18, 0.27, 0.37, 0.50, 0.62, 0.74, 0.87, 1.00, 1.26, 1.49, 1.74, 2.01, 2.24, 2.48, 3.02, 3.53, 3.98, 4.49, 5.04, 5.49, 5.97, 7.05, 8.07, 8.99, 9.99, 15.13, 20.00])
-bma=1/(bmz+1)
-s_bm[-1]=bm_eagleresults[0]*c.kb
-
-eps_str=np.zeros(l) #Stars
-eps_str0=c.om_str0*c.eps_c0
-eps_str[-1]=eps_str0
-s_str=np.zeros(l)
-
-eps_bh=np.zeros(l) #Stellar mass black holes
-eps_bh0=0.56*10**8*c.msol*c.c**2/c.mpc**3 #Fukugita & Peebles
-eps_bh[-1]=eps_bh0
-s_bh=np.zeros(l)
-s_bh0=1.6*10**(17)*c.kb #Egan and Lineweaver 2009
-s_bh[-1]=s_bh0
-s_bhhigh=np.zeros(l)
-s_bhlow=np.zeros(l)
-s_bh_err=np.zeros(l)
-s_bh_sicilia=np.zeros(l)
-
-eps_dm=np.zeros(l) #Dark matter
-eps_dm0=c.eps_c0*c.om_dm0
-eps_dm[-1]=eps_dm0
-t_dm=np.zeros(l)
-s_dm=np.zeros(l)
-
-eps_remn=np.zeros(l) #White dwarves, neutron stars, stellar mass black holes
-eps_remn0=c.eps_c0*c.om_remn
-eps_remn[-1]=eps_remn0
-t_remn=np.zeros(l)
-s_remn=np.zeros(l)
-
-eps_cmb=np.zeros(l) #Cosmic Microwave Background photons
-eps_cmb0=c.eps_c0*c.om_cmb
-eps_cmb[-1]=eps_cmb0
-t_cmb=np.zeros(l)
-t_cmb0=2.7255 #K, Fixen 2009
-t_cmb[-1]=t_cmb0
-s_cmb=np.zeros(l)
-s_cmb[-1]=(4.0/3.0)*eps_cmb[-1]/(t_cmb[-1])
-
-eps_nu=np.zeros(l) #Primordial neutrinos
-t_nu=np.zeros(l)
-t_nu0=(4.0/11.0)**(1.0/3.0)*t_cmb0
-t_nu[-1]=t_nu0
-eps_nu0=c.om_nu*c.eps_c0
-eps_nu[-1]=eps_nu0
-s_nu=np.zeros(l)
-s_nu[-1]=2*np.pi**2*c.kb**4*6*7*t_nu[-1]**3/(45*c.c**3*c.hbar**3*8) #Egan & Lineweaver 2009
-
-eps_l=np.zeros(l) #Lambda
-eps_l0=c.eps_c0*c.om_l
-eps_l[-1]=eps_l0
-t_l=np.zeros(l)
-s_l=np.zeros(l)
-
-eps_smbh=np.zeros(l) #Supermassive black holes
-s_smbh=np.zeros(l)
-s_smbhhigh=np.zeros(l)
-s_smbhlow=np.zeros(l)
-
-eps_c=np.zeros(l) #Critical energy density
-eps_c[-1]=c.eps_c0
-
-eps=np.zeros(l) #Total energy
-eps[-1]=eps_dm0+eps_bm0+eps_cmb0+eps_nu0+eps_l0
-s=np.zeros(l)
 #%%
 """
 Functions for a' and a'', conformal time derivatives
@@ -172,13 +45,6 @@ Progenitor to remnant mass function crudely approximated from Fryer & Kalogera, 
 https://arxiv.org/pdf/astro-ph/9911312.pdf
 """
 
-mtest=np.logspace(0.8, 2.3, num=1000)
-yz0=bh.dn_sicilia(mtest, 5)
-figt, axt = plt.subplots(1,1)
-axt.scatter(np.log10(mtest), np.log10(yz0))
-#axt.set_ylim(-3,7)
-axt.set_xlim(0.8, 2.3)
-
 #%%
 #Present day SMBH entropy
 runningtot=0
@@ -188,7 +54,7 @@ iterations=100
 jstart=10**(8.-((17-8)/iterations))
 for j in np.logspace(8, 17, num=iterations): #j (DM mass) is in solar masses
     tempu=smbh.xi2*(j-jstart)
-    dn=smbh.rhs(j, 0, eps_bm[-1], eps_dm[-1], eps_c[-1], tempu)*(-h)*ap(1,eps[-1]) #should there be a negative in front of the h?  maybe...?
+    dn=smbh.rhs(j, 0, late.eps_bm[-1], late.eps_dm[-1], late.eps_c[-1], tempu)*(-c.h)*ap(1,late.eps[-1]) #should there be a negative in front of the h?  maybe...?
     if dn<0:
         dn=0
     dnhigh=dn*1.2
@@ -204,19 +70,9 @@ for j in np.logspace(8, 17, num=iterations): #j (DM mass) is in solar masses
     runningtotlow=runningtotlow+smbh_dslow*dnlow
     jstart=j
     
-s_smbh[-1]=runningtot
-s_smbhhigh[-1]=runningtothigh
-s_smbhlow[-1]=runningtotlow
-#%%
-'''
-Baryon entropy density functions
-Species tracking arrays go as follows:
-[electrons, protons, singly ionized helium, neutral hydrogen, neutral helium, heavy metals]
-'''
-
-specpart=[2, 2, 2, 4, 1]
-specmass=[0.5109989461, 938.272081, 3.01603*c.amu, 2.014*c.amu, 4.00260*c.amu] #MeV (PDG, NIST)
-ionization_energy=np.array([13.54, 24.48, 54.17])*1.60218*10**(-19)
+late.s_smbh[-1]=runningtot
+late.s_smbhhigh[-1]=runningtothigh
+late.s_smbhlow[-1]=runningtotlow
 #%%
 
 '''
@@ -229,10 +85,10 @@ print("Scale factor:")
 
 stop=0
 switch=False
-for i in np.arange(2,len(a)+1):
+for i in np.arange(2,c.l+1):
     #Euler Method
-    y=a[-i+1]
-    a[-i]=y-h*ap(y,eps[-i+1])#-0.5*h**2*ap2(y,eps_bm[l-i+1],eps_dm[l-i+1],eps_l[l-i+1])/2
+    y=late.a[-i+1]
+    late.a[-i]=y-c.h*ap(y,late.eps[-i+1])#-0.5*h**2*ap2(y,eps_bm[l-i+1],eps_dm[l-i+1],eps_l[l-i+1])/2
     
     #4th order Runge-Kutta attempt
     # k1=h*ap(y,eps[l-i+1]) #h*f(y_n,t_n)
@@ -241,67 +97,65 @@ for i in np.arange(2,len(a)+1):
     # k4=h*ap(y+k3, eps[l]) #h*f(y_n+k3,t_n+h)
     # a[l-i]=y+(k1+2*k2+2*k3+k4)/6
     
-    if i%100==0:
-        print(a[-i])
-#    if a[l-i]<0:
-#        stop=l-i+1
-#        break
-    eta[-i]=c.eta0-h*(i-1)    
-    r_p[-i]=a[-i]*c.c*(c.eta0-h*(i-1))
-    r_ceh[-i]=a[-i]*(c.etainf-(c.eta0-h*(i-1)))*c.c
-    r_ceh_h[-i]=a[-i]*(c.etainf_h-(c.eta0_h-h*(i-1)))*c.c
-    r_ceh_l[-i]=a[-i]*(c.etainf_l-(c.eta0_l-h*(i-1)))*c.c
-    volumeceh[-i]=4*np.pi*r_ceh[-i]**3/3
-    volumeceh_h[-i]=4*np.pi*r_ceh_h[-i]**3/3
-    volumeceh_l[-i]=4*np.pi*r_ceh_l[-i]**3/3
-    volume[-i]=4*np.pi*r_p[-i]**3/3
-    eps_bm[-i]=eps_bm[-i+1]*(a[-i+1]/a[-i])**3
-    eps_dm[-i]=eps_dm[-i+1]*(a[-i+1]/a[-i])**3
-#    eps_mat[-i]=eps_dm[-i]+eps_bm[-i]
-    eps_cmb[-i]=eps_cmb[-i+1]*(a[-i+1]/a[-i])**4
-    eps_nu[-i]=eps_nu[-i+1]*(a[-i+1]/a[-i])**4
-    eps_l[-i]=eps_l0
-#    eps_rad[-i]=eps_nu[-i]+eps_cmb[-i]
-    eps[-i]=eps_dm[-i]+eps_cmb[-i]+eps_nu[-i]+eps_l[-i]+eps_bm[-i]
-    hub[-i]=np.sqrt(8*np.pi*c.G*eps[-i]/(3*c.c**2))*c.mpc/1000
-    if (eps_bm[-i+1]+eps_dm[-i+1])>eps_l[-i+1]:
-        time[-i]=time[-i+1]*(a[-i]/a[-i+1])**(3./2.)
+    if (i-2)%((c.l-2)//10)==0:
+        print(f"{round(100*(i-2)/(len(late.a)-2), 0)}% done, now calculating a={late.a[i]}")
+    #Horizons & Volumes
+    late.r_p[-i]=late.a[-i]*c.c*(c.eta0-c.h*(i-1))
+    late.r_ceh[-i]=late.a[-i]*(c.etainf-(c.eta0-c.h*(i-1)))*c.c
+    late.r_ceh_h[-i]=late.a[-i]*(c.etainf_h-(c.eta0_h-c.h*(i-1)))*c.c
+    late.r_ceh_l[-i]=late.a[-i]*(c.etainf_l-(c.eta0_l-c.h*(i-1)))*c.c
+    late.volumeceh[-i]=4*np.pi*late.r_ceh[-i]**3/3
+    late.volumeceh_h[-i]=4*np.pi*late.r_ceh_h[-i]**3/3
+    late.volumeceh_l[-i]=4*np.pi*late.r_ceh_l[-i]**3/3
+    late.volume[-i]=4*np.pi*late.r_p[-i]**3/3
+    
+    #Energy Densities
+    late.eps_bm[-i]=late.eps_bm[-i+1]*(late.a[-i+1]/late.a[-i])**3
+    late.eps_dm[-i]=late.eps_dm[-i+1]*(late.a[-i+1]/late.a[-i])**3
+    late.eps_cmb[-i]=late.eps_cmb[-i+1]*(late.a[-i+1]/late.a[-i])**4
+    late.eps_nu[-i]=late.eps_nu[-i+1]*(late.a[-i+1]/late.a[-i])**4
+    late.eps_l[-i]=late.eps_l0
+    late.eps=late.eps_dm+late.eps_cmb+late.eps_nu+late.eps_l+late.eps_bm
+    
+    #Time Measures
+    late.hub[-i]=np.sqrt(8*np.pi*c.G*late.eps[-i]/(3*c.c**2))*c.mpc/1000
+    late.eta[-i]=c.eta0-c.h*(i-1)  
+    if (late.eps_bm[-i+1]+late.eps_dm[-i+1])>late.eps_l[-i+1]:
+        late.time[-i]=late.time[-i+1]*(late.a[-i]/late.a[-i+1])**(3./2.)
     else:
-        time[-i]=(np.log(a[-i]/a[-i+1])+hub[-i+1]*time[-i+1])/hub[-i] #Assume H=a'/a^2
-#    eps_str[-i]=eps_str[-i+1]-strdot(hub[-i+1])*h*a[-i+1]*c.c**2
+        late.time[-i]=(np.log(late.a[-i]/late.a[-i+1])+late.hub[-i+1]*late.time[-i+1])/late.hub[-i] #Assume H=a'/a^2
+        
     #comp=32*sigmat*sigmasb*a[l-i+1]*(t_cmb[l-i+1]**4)*xe*(t_bm[l-i+1]-t_cmb[l-i+1])/(3*hub[l-i+1]*me*(c**2)*(1+xe+xhe)*np.sqrt(8*np.pi*G*eps[l-i+1]/3))
-    t_cmb[-i]=((c.m_pl*c.c**2*c.l_pl)**3*eps_cmb[-i]*15/(np.pi**2))**(1./4.)/c.kb #mukhanov exact for massless relativistic bosons (chemical potential=mass=0)
-    if t_cmb[-i]/c.ev2K>0.27 and switch==False:
-        decoupling_index=l-i
+    
+    #Temperatures
+    late.t_cmb[-i]=((c.m_pl*c.c**2*c.l_pl)**3*late.eps_cmb[-i]*15/(np.pi**2))**(1./4.)/c.kb #mukhanov exact for massless relativistic bosons (chemical potential=mass=0)
+    late.t_nu[-i]=late.t_cmb[-i]*(4./11.)**(1./3.) #After electron positron annihilation
+    
+    #Records index corresponding to neutrino decoupling
+    if late.t_cmb[-i]/c.ev2K>0.27 and switch==False:
+        decoupling_index=c.l-i
         switch=True
     else:
         pass
-    t_nu[-i]=t_cmb[-i]*(4./11.)**(1./3.) #After electron positron annihilation
-    #t_bm[l-i]=t_bm[l-i+1]+h*2*(hub[l-i+1]*1000/mpc)*t_bm[l-i+1]*a[l-i+1] #Adiabatic cooling
-    eps_c[-i]=c.c**2*3*(hub[-i]*1000/c.mpc)**2/(8*np.pi*c.G)
-    z=1/a[-i]-1
-    # if z>20 and switch==False:
-    #     s_bm[l-i:]=np.interp(a[l-i:], np.flip(bma), np.flip(bm_eagleresults))*kb
-    #     #s_bm[l-i]=bm_eagleresults[-1]*kb
-    #     switch==True
-    # elif z>20 and switch==True:
-    #     s_bm[l-i]=eps_bm[l-i]/t_bm[l-i]#s_bm[l-i+1]-(eps_bm[l-i+1]-eps_bm[l-i])/t_bm[l-i]
-    # else:
-    #     pass
+    
+    late.eps_c[-i]=c.c**2*3*(late.hub[-i]*1000/c.mpc)**2/(8*np.pi*c.G)
+    z=1/late.a[-i]-1
+    
+    #SMBH Entropy Calculation
     runningtot=0
     runningtothigh=0
     runningtotlow=0
     iterations=100
     jstart=10**(8.-((17-8)/iterations))
     smftemp=[]
-    for j in np.logspace(8, 17, num=iterations): #j (DM mass) is in solar masses
-        tempu=smbh.xi2*(j-jstart)
-        dn=smbh.rhs(j, z, eps_bm[-i], eps_dm[-i], eps_c[-i], tempu)*(-h)*ap(a[-i],eps[-i]) #should there be a negative in front of the h?  maybe...?
-        if dn<0:
+    for j in np.logspace(8, 17, num=iterations): #j (halo mass) is in solar masses
+        d_mu=smbh.xi2*(j-jstart) #xi2*dM
+        dn=smbh.rhs(j, z, late.eps_bm[-i], late.eps_dm[-i], late.eps_c[-i], d_mu)*(-c.h)*ap(late.a[-i],late.eps[-i]) #should there be a negative in front of the h?  maybe...?
+        if dn<0: #function for dn naturally extrapolates to negative numbers, so cutoff at 0 is necessary
             dn=0
-        dnhigh=dn*1.2
+        dnhigh=dn*1.2 #20% uncertainty in dn relation
         dnlow=dn*0.8
-        smbh_mass=10**(1.55*np.log10(j/(1e13))+8.01)*c.msol #smbh mass in kg
+        smbh_mass=10**(1.55*np.log10(j/(1e13))+8.01)*c.msol #SMBH mass in kg
         smbh_masshigh=10**(1.6*np.log10(j/(1e13))+8.05)*c.msol
         smbh_masslow=10**(1.5*np.log10(j/(1e13))+7.97)*c.msol
         smbh_dshigh=4*np.pi*c.kb*c.G*smbh_masshigh**2/(c.c*c.hbar)
@@ -314,65 +168,69 @@ for i in np.arange(2,len(a)+1):
         jstart=j
     s_smbhmf.append(smftemp)
         
-    s_smbh[-i]=runningtot
-    s_smbhhigh[-i]=runningtothigh
-    s_smbhlow[-i]=runningtotlow
-    s_cmb[-i]=2*np.pi**2*c.kb**4*2*t_cmb[-i]**3/(45*c.c**3*c.hbar**3)
-    s_nu[-i]=2*np.pi**2*c.kb**4*6*7*t_nu[-i]**3/(45*c.c**3*c.hbar**3*8) #Lineweaver 2009
+    late.s_smbh[-i]=runningtot
+    late.s_smbhhigh[-i]=runningtothigh
+    late.s_smbhlow[-i]=runningtotlow
+    late.s_cmb[-i]=2*np.pi**2*c.kb**4*2*late.t_cmb[-i]**3/(45*c.c**3*c.hbar**3)
+    late.s_nu[-i]=2*np.pi**2*c.kb**4*6*7*late.t_nu[-i]**3/(45*c.c**3*c.hbar**3*8) #Lineweaver 2009
 #    s_rad[l-i]=s_nu[l-i]+s_cmb[l-i]
-    stot_ceh[-i]=(r_ceh[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-    s_ceh[-i]=(r_ceh[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh[-i]
-    stot_ceh_h[-i]=(r_ceh_h[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-    s_ceh_h[-i]=(r_ceh_h[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh_h[-i]
-    stot_ceh_l[-i]=(r_ceh_l[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
-    s_ceh_l[-i]=(r_ceh_l[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/volumeceh_l[-i]
+    late.stot_ceh[-i]=(late.r_ceh[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
+    late.s_ceh[-i]=(late.r_ceh[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/late.volumeceh[-i]
+    late.stot_ceh_h[-i]=(late.r_ceh_h[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
+    late.s_ceh_h[-i]=(late.r_ceh_h[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/late.volumeceh_h[-i]
+    late.stot_ceh_l[-i]=(late.r_ceh_l[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))
+    late.s_ceh_l[-i]=(late.r_ceh_l[-i]**2*np.pi*c.kb*c.c**3/(c.G*c.hbar))/late.volumeceh_l[-i]
+
 #%%
 print("\n Now calculating stellar energy density, stellar mass black holes, and baryons... \n")
 #Stellar energy density plotting
-z20=np.argmin(abs(1./a-21))
-z30=np.argmin(abs(1./a-31))
-for zed in np.arange(z30,l):
-    eps_str[zed]=eps_str[zed-1]+bh.strdot(hub[zed-1])*h*a[zed-1]*c.c**2
-    print(bh.strdot(hub[zed-1])*h*a[zed-1]*c.c**2)
+z20=np.argmin(abs(1./late.a-21))
+z30=np.argmin(abs(1./late.a-31)) #index for redshift 30
 
-dentestarray=np.zeros(l)
-densiciliatestarray=np.zeros(l)
+dentestarray=np.zeros(c.l)
+densiciliatestarray=np.zeros(c.l)
 
+starsteps = 500
+bhsteps = 100 #Resolution of stellar mass BH IMF function
+
+starmass = np.logspace(np.log10(0.179), np.log10(31), num=starsteps) #masses for stellar IMF in msol
+progmass = np.logspace(np.log10(25), 100, num=bhsteps) # masses for BH progenitor IMF in msol
+mstart=10**(1.398-((2-1.3)/bhsteps)) #start at M=25 Msol, s=8.05e+97 mstart has negligible change, most comes from high mass BHs
 #Stellar mass black hole number density tracking, typically at 8.05E+97
-mstart=10**(1.3-((2-1.3)/1000))
-mstart=10**(1.398-((2-1.3)/1000)) #start at M=25 Msol, s=8.05e+97 mstart has negligible change, most comes from high mass BHs
-for i in np.arange(z30,l-1):
-    for m in np.logspace(1.398, 2, num=1000):
-        mstep=(m-mstart)/(m*np.log(10)) #dlogM
-        epsstr_step=bh.strdot(hub[i])*h*a[i]*c.c**2
-        den, den_err=bh.norm(epsstr_step)*bh.imf(m)[0]*mstep, bh.norm(epsstr_step)*bh.imf(m)[1]*mstep #dn, dn_err - number density of progenitors between mass M and M+dM
-        #den, den_err=norm(eps_str[i])*imf(m)[0]*mstep, norm(eps_str[i])*imf(m)[1]*mstep #dn, dn_err - number density of progenitors between mass M and M+dM
-        denhigh=bh.normhigh(epsstr_step)*bh.imfhigh(m)*mstep
-        denlow=bh.normlow(epsstr_step)*bh.imflow(m)*mstep
-        z=1/a[i]-1
+for i in np.arange(z30,c.l-1):
+    late.eps_str[i]=late.eps_str[i-1]+st.strdot(late.hub[i-1])*c.h*late.a[i-1]*c.c**2
+    if (i-z30)%((c.l-z30)//10)==0:
+        print(f"{round(100*(i-z30)/(c.l-z30),0)}% done, now calculating z={1/late.a[i]-1}")
+    epsstr_step = st.strdot(late.hub[i])*c.h*late.a[i]*c.c**2
+    normalization = st.norm(epsstr_step)
+    for j in range(1,starsteps-1): #stellar IMF
+        m = starmass[j]
+        mstep = (starmass[j+1]-starmass[j-1])/(2*m*np.log(10)) #dlogM
+        dn, dn_err = normalization*st.imf(m)[0]*mstep, normalization*st.imf(m)[1]*mstep
+        late.s_str[i]+=st.entropyrate(m)*late.a[i]*c.h*dn #(ds(m)/dt)*dt*dn(m)
+    for j in range(1,bhsteps-1): #BH progenitor IMF
+        m = starmass[j]
+        mstep = (starmass[j+1]-starmass[j-1])/(2*m*np.log(10)) #dlogM
+        dn, dn_err=normalization*st.imf(m)[0]*mstep, normalization*st.imf(m)[1]*mstep #dn, dn_err - number density of progenitors between mass M and M+dM
+        z=1/late.a[i]-1
         if z<=10:
             den_sicilia=bh.dn_sicilia(m,z)*mstep
             densiciliatestarray[i]=den_sicilia
-        #a*deta=dt
-        #t=int from a[i] to a[i+steps] of a*deta
-        intg=a[i]*h
+        intg=late.a[i]*c.h #time elapsed since star birth, with dt=a*d(eta)
         steps=1
-        while(bh.tstar(m)>intg):
-            intg+=a[i+steps]*h
+        while st.tstar(m)>intg and (i+steps)<c.l: #add dt[i] until just after star dies
+            intg+=late.a[i+steps]*c.h
             steps+=1
-        if (i+steps)<l:
-            s_bh[i+steps:]+=den*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
+        if (i+steps)<c.l:
+            late.s_bh[i+steps:]+=dn*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
             if z<=10:
-                s_bh_sicilia[i+steps]+=den_sicilia*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
+                late.s_bh_sicilia[i+steps]+=den_sicilia*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
  #           s_bh_err[i+steps]+=np.sqrt((4*np.pi*k_b*G/(c*hbar))**2*(den_err**2*(prog2rem(m)*msol)**2+()))
-            s_bhhigh[i+steps]+=denhigh*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
-            s_bhlow[i+steps]+=denlow*(4*np.pi*c.kb*c.G/(c.c*c.hbar))*(bh.prog2rem(m)*c.msol)**2
-        mstart=m
+        
 
-s_bh_sicilia=np.array(s_bh_sicilia)
+late.s_bh_sicilia=np.array(late.s_bh_sicilia)
 
 mf=[]
-
 for zed in np.linspace(0,10,num=50):
     mftemp=[]
     mstart=10**(0.69897-((2.20412-0.69897)/1000)) #start atm=5 to m=160
@@ -394,58 +252,7 @@ bhax.set_ylabel(r"$M_{BH}$")
 bhax.set_title(r"Mass Bin with Highest $s_{BH}$")
 
 
-#%%
-#Baryons
-z20=np.argmin(abs(1./a-21))
-s_bm[z20:]=np.interp(a[z20:], np.flip(bma), np.flip(bm_eagleresults))*c.kb
-#s_bm[l-i]=bm_eagleresults[-1]*kb
-deg=2
-n_b=c.photonbaryoneta*c.cmbnumdens/a**3 #Baryon number density in m^-3
 
-# https://arxiv.org/pdf/astro-ph/9909275.pdf
-# https://arxiv.org/pdf/astro-ph/9912182.pdf
-ar=4*c.sigmasb/c.c
-def dtm(tr, tm, ne, nb, hubc, a):
-    lambdaterms=0
-    sol=8*c.sigmat*ar*tr**4*ne*(tm-tr)/(3*hubc*c.me*c.c*nb)+2*tm+2*lambdaterms/(3*c.kb*nb*h)
-    return sol*a #dT/dz
-
-def Xfrac(t): #https://people.ast.cam.ac.uk/~pettini/Intro%20Cosmology/Lecture09.pdf
-    q=ionization_energy[0]
-    s=3.84*c.photonbaryoneta*(c.kb*t/(c.me*c.c**2))**1.5*np.exp(q/(c.kb*t))
-    return 1/(1+s)
-
-adecarg=np.argmin(abs(a-1/(1+c.zdec)))
-t_bm[:(adecarg+1)]=t_cmb[:(adecarg+1)]
-hmm=np.zeros(len(t_bm))
-
-nearray=[]
-for i in np.arange(adecarg, len(t_bm)-1):
-    ne=n_b[i]
-    #ne=Xfrac(t_bm[i])*n_b[i]
-    nearray.append(ne)
-    hmm[i]=dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i], a[i])
-    #t_bm[i+1]=t_bm[i]-hub[i]*dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i])*h*1000/mpc
-    t_bm[i+1]=t_bm[i]-a[i]**(-2)*dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i], a[i])*(a[i+1]-a[i])
-
-# adecarg=np.argmin(abs(a-1/(1+zdec)))
-# t_bm[:(adecarg+1)]=t_cmb[:(adecarg+1)]
-# hmm=np.zeros(len(t_bm))
-
-# nearray=[]
-# for i in np.arange(adecarg, len(t_bm)-1):
-#     ne=n_b[i]
-#     #ne=Xfrac(t_bm[i])*n_b[i]
-#     nearray.append(ne)
-#     hmm[i]=dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i], a[i])
-#     #t_bm[i+1]=t_bm[i]-hub[i]*dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i])*h*1000/mpc
-#     t_bm[i+1]=t_bm[i]-a[i]**(-2)*dtm(t_cmb[i], t_bm[i], ne, n_b[i], hub[i], a[i])*(a[i+1]-a[i])
-    
-#s_bm[:z20]=n_b[:z20]*(5./2.-np.log((hbar**3/kb**(3./2.))*n_b[:z20]*(2*np.pi/(t_bm[:z20]*bmass))**(3./2.)/(deg*(1+15.*t_bm[:z20]*kb/(8.*(bmass*c**2))))))*kb
-
-s_bm=n_b*(5./2.-np.log((c.hbar**3/c.kb**(3./2.))*n_b*(2*np.pi/(t_bm*c.bmass))**(3./2.)/(deg*(1+15.*t_bm*c.kb/(8.*(c.bmass*c.c**2))))))*c.kb
-
-s_bm[z20:]=np.interp(a[z20:], np.flip(bma), np.flip(bm_eagleresults))*c.kb
 #%%
 
 '''
@@ -455,10 +262,10 @@ We approximate interaction rates from dimensional analysis of the cross section 
 print("\n Now calculating pre-CMB era... \n")
 
 
-earlytemp=np.logspace(np.log10(t_cmb[decoupling_index]/c.ev2K),11, c.early_length) #eV
+earlytemp=np.logspace(np.log10(late.t_cmb[decoupling_index]/c.ev2K),11, c.early_length) #eV
 
-ea.early_dm[-1]=eps_dm[decoupling_index]
-ea.early_l[-1]=eps_l[decoupling_index]
+ea.early_dm[-1]=late.eps_dm[decoupling_index]
+ea.early_l[-1]=late.eps_l[decoupling_index]
 
 e_dec=ea.standardmodel_postqcd[11][1]
 
@@ -466,9 +273,9 @@ earlytemp=np.flip(earlytemp)
 eps_rel=np.zeros(len(earlytemp))
 s_rel=np.zeros(len(earlytemp))
 early_a=np.zeros(len(earlytemp))
-early_a[-1]=a[decoupling_index]*(t_cmb[decoupling_index]/c.ev2K)*early.gstarS(t_cmb[decoupling_index]/c.ev2K, ea.standardmodel_preqcd, ea.standardmodel_postqcd)**(1./3.)/(earlytemp[-1]*early.gstarS(earlytemp[-1], ea.standardmodel_preqcd, ea.standardmodel_postqcd)**(1./3.))
+early_a[-1]=late.a[decoupling_index]*(late.t_cmb[decoupling_index]/c.ev2K)*early.gstarS(late.t_cmb[decoupling_index]/c.ev2K, ea.standardmodel_preqcd, ea.standardmodel_postqcd)**(1./3.)/(earlytemp[-1]*early.gstarS(earlytemp[-1], ea.standardmodel_preqcd, ea.standardmodel_postqcd)**(1./3.))
 early_hub=np.zeros(len(earlytemp))
-early_hub[-1]=hub[decoupling_index]
+early_hub[-1]=late.hub[decoupling_index]
 
 # #%%
 # mutest=np.logspace(-10, np.log10(mup(0.0000001)), 100)
@@ -634,7 +441,7 @@ for i in backwardsindex_fromdecoupling:
                 particle[4][2][i]=entropy
             elif particle[0]=='Photon':
                 #particle_t=nu_dec*(a_nudec/early_a[i])*(11./4)**(1./3)
-                particle_t=(t_cmb[0]/c.ev2K)*(a[0]/early_a[i])
+                particle_t=(late.t_cmb[0]/c.ev2K)*(late.a[0]/early_a[i])
                 energy=np.pi**2*particle[3]*(c.kb*c.ev2K*particle_t)**4/(30*(c.m_pl*c.c**2*c.l_pl)**3)
                 #np.pi**2*gstar(t)*(kb*t*ev2K)**4/(30*(m_pl*c**2*l_pl)**3)
                 entropy=2*np.pi**2*c.kb**4*2*(particle_t*c.ev2K)**3/(45*c.c**3*c.hbar**3)
@@ -711,20 +518,20 @@ theoretical_zeq=(c.om_bm0+c.om_dm0)/(c.om_cmb+c.om_nu)
 
 #Time/Hubble parameter
 #SET PROPER TIME OF CMB, DOES NOT CORRELATE TO MODERN UNIVERSE CODE
-set_t=time[0] #set_t=380000*yr
+set_t=late.time[0] #set_t=380000*yr
 early_eta=np.zeros(c.early_length)
-early_eta[-1]=eta[decoupling_index]
+early_eta[-1]=late.eta[decoupling_index]
 early_t=np.zeros(c.early_length)
 early_t[-1]=set_t#time[decoupling_index]
-e_h=h*10**(-3)
+e_h=c.h*10**(-3)
 e_t=e_h/10
 l_temp=10000
 eta_temp=np.zeros(l_temp)
 time_temp=np.zeros(l_temp)
 a_temp=np.zeros(l_temp)
-eta_temp[-1]=eta[decoupling_index]
-time_temp[-1]=time[decoupling_index]
-a_temp[-1]=a[decoupling_index]
+eta_temp[-1]=late.eta[decoupling_index]
+time_temp[-1]=late.time[decoupling_index]
+a_temp[-1]=late.a[decoupling_index]
 dt_array=np.zeros(l_temp)
 adot=np.zeros(l_temp)
 early_r_ceh=np.zeros(c.early_length)
@@ -867,7 +674,7 @@ def s_hawking(m, m0): #Absolute entropy as a function of mass given original mas
     return 16*np.pi*c.G*c.kb*(m0**2-m**2)/(3*c.hbar*c.c)
 
 
-totaltime=np.concatenate((early_t, time))
+totaltime=np.concatenate((early_t, late.time))
 
 mass_range0=np.logspace(np.log10(massfunc(0)[0]/(1+1e-8)),np.log10(massfunc(0)[0]))[:-1] #masses in kg for t_elapsed
 t_range0=[]
@@ -990,8 +797,8 @@ def spbh(eps, option, m): #eps is CDM energy density, option[0] is BH mass, n is
     return n*4*np.pi*c.kb*c.G*(np.array(m))**2/(c.c*c.hbar), n #returns entropy density of PBHs
 
 
-totaldm=np.concatenate((ea.early_dm, eps_dm))
-totala=np.concatenate((early_a, a))
+totaldm=np.concatenate((ea.early_dm, late.eps_dm))
+totala=np.concatenate((early_a, late.a))
 
 pbhtype=0
 
@@ -999,12 +806,12 @@ mass_range0=np.flip(mass_range0)
 mass0=np.interp(totaltime[mev100:], time0, mass_range0)
 mass0=np.concatenate((np.zeros(len(totaltime)-len(mass0)),np.array(mass0)))
 
-early_pbh0=np.zeros(c.early_length+l)
+early_pbh0=np.zeros(c.early_length+c.l)
 #early_pbh0[mev100]=spbh0(early_dm[mev100], pbhtype) #Assumes PBH mass function assumes mass fraction of DM at time of PBH creation
 early_pbh0[(mev100):]=spbh(totaldm[mev100:], pbhtype, mass0[mev100:])[0]
-early_pbh0_noevap=np.zeros(c.early_length+l)
+early_pbh0_noevap=np.zeros(c.early_length+c.l)
 early_pbh0_noevap[mev100:]=spbh(totaldm[mev100:], pbhtype, mass0[-1])[0]
-hawking0=np.zeros(c.early_length+l)
+hawking0=np.zeros(c.early_length+c.l)
 hawking0[(mev100):]=s_hawking(mass0[mev100:], massfunc(pbhtype)[0])*spbh(totaldm[mev100:], pbhtype, mass0[mev100:])[1]
 
 figpbh, axpbh = plt.subplots(1,1)
@@ -1030,13 +837,13 @@ mass_range1=np.flip(mass_range1)
 mass1=np.interp(totaltime[mev100:], time1, mass_range1)
 mass1=np.concatenate((np.zeros(len(totaltime)-len(mass1)),np.array(mass1)))
 
-early_pbh1=np.zeros(c.early_length+l)
+early_pbh1=np.zeros(c.early_length+c.l)
 #early_pbh0[mev100]=spbh0(early_dm[mev100], pbhtype) #Assumes PBH mass function assumes mass fraction of DM at time of PBH creation
 early_pbh1[(mev100):]=spbh(totaldm[mev100:], pbhtype, mass1[mev100:])[0]
-early_pbh1_noevap=np.zeros(c.early_length+l)
+early_pbh1_noevap=np.zeros(c.early_length+c.l)
 early_pbh1_noevap[mev100:]=spbh(totaldm[mev100:], pbhtype, mass1[-1])[0]
 #early_wimp1=early_dm*(1-massfunc(pbhtype)[1])
-hawking1=np.zeros(c.early_length+l)
+hawking1=np.zeros(c.early_length+c.l)
 hawking1[(mev100):]=s_hawking(mass1[mev100:], massfunc(pbhtype)[0])*spbh(totaldm[mev100:], pbhtype, mass1[mev100:])[1]
 
 pbhtype=2
@@ -1045,13 +852,13 @@ mass_range2=np.flip(mass_range2)
 mass2=np.interp(totaltime[mev100:], time2, mass_range2)
 mass2=np.concatenate((np.zeros(len(totaltime)-len(mass2)),np.array(mass2)))
 
-early_pbh2=np.zeros(c.early_length+l)
+early_pbh2=np.zeros(c.early_length+c.l)
 #early_pbh0[mev100]=spbh0(early_dm[mev100], pbhtype) #Assumes PBH mass function assumes mass fraction of DM at time of PBH creation
 early_pbh2[(mev100):]=spbh(totaldm[mev100:], pbhtype, mass2[mev100:])[0]
-early_pbh2_noevap=np.zeros(c.early_length+l)
+early_pbh2_noevap=np.zeros(c.early_length+c.l)
 early_pbh2_noevap[mev100:]=spbh(totaldm[mev100:], pbhtype, mass2[-1])[0]
 #early_wimp2=early_dm*(1-massfunc(pbhtype)[1])
-hawking2=np.zeros(c.early_length+l)
+hawking2=np.zeros(c.early_length+c.l)
 hawking2[(mev100):]=s_hawking(mass2[mev100:], massfunc(pbhtype)[0])*spbh(totaldm[mev100:], pbhtype, mass2[mev100:])[1]
 
 pbhtype=3
@@ -1060,12 +867,12 @@ mass_range3=np.flip(mass_range3)
 mass3=np.interp(totaltime[mev100:], time3, mass_range3)
 mass3=np.concatenate((np.zeros(len(totaltime)-len(mass3)),np.array(mass3)))
 
-early_pbh3=np.zeros(c.early_length+l)
+early_pbh3=np.zeros(c.early_length+c.l)
 #early_pbh0[mev100]=spbh0(early_dm[mev100], pbhtype) #Assumes PBH mass function assumes mass fraction of DM at time of PBH creation
 early_pbh3[(mev100):]=spbh(totaldm[mev100:], pbhtype, mass3[mev100:])[0]
-early_pbh3_noevap=np.zeros(c.early_length+l)
+early_pbh3_noevap=np.zeros(c.early_length+c.l)
 early_pbh3_noevap[mev100:]=spbh(totaldm[mev100:], pbhtype, massfunc(3)[0])[0]
-hawking3=np.zeros(c.early_length+l)
+hawking3=np.zeros(c.early_length+c.l)
 hawking3[(mev100):]=s_hawking(mass3[mev100:], massfunc(pbhtype)[0])*spbh(totaldm[mev100:], pbhtype, mass3[mev100:])[1]
 
 figpbh3, axpbh3 = plt.subplots(1,1)
@@ -1079,12 +886,12 @@ mass4=np.interp(totaltime[mev100:], time4, mass_range4)
 
 mass4=np.concatenate((np.zeros(len(totaltime)-len(mass4)),np.array(mass4)))
 
-early_pbh4=np.zeros(c.early_length+l)
+early_pbh4=np.zeros(c.early_length+c.l)
 #early_pbh0[mev100]=spbh0(early_dm[mev100], pbhtype) #Assumes PBH mass function assumes mass fraction of DM at time of PBH creation
 early_pbh4[(mev100):]=spbh(totaldm[mev100:], pbhtype, mass4[mev100:])[0]
-early_pbh4_noevap=np.zeros(c.early_length+l)
+early_pbh4_noevap=np.zeros(c.early_length+c.l)
 early_pbh4_noevap[mev100:]=spbh(totaldm[mev100:], pbhtype, massfunc(4)[0])[0]
-hawking4=np.zeros(c.early_length+l)
+hawking4=np.zeros(c.early_length+c.l)
 hawking4[(mev100):]=s_hawking(mass4[mev100:], massfunc(pbhtype)[0])*spbh(totaldm[mev100:], pbhtype, mass4[mev100:])[1]
 
 figpbh4, axpbh4 = plt.subplots(1,1)
@@ -1106,22 +913,22 @@ def strictly_increasing(L):
 
 print("Energy at Decoupling:  Early Code, Late Code")
 print("-------------------")
-print("Cosmic Microwave Background: %10.2E, \t(%10.2E)" % (ea.standardmodel_postqcd[-1][4][0][-1], eps_cmb[0]))
-print("CMB Temp                   : %10.2E, \t(%10.2E)" % (ea.standardmodel_postqcd[-1][4][1][-1]*c.ev2K, t_cmb[0]))
-print("Primordial Neutrinos       : %10.2E \t(%10.2E)" % (ea.standardmodel_postqcd[-3][4][0][-1], eps_nu[0]))
-print("Neutrino Temp              : %10.2E \t(%10.2E)" % (ea.standardmodel_postqcd[-3][4][1][-1]*c.ev2K, t_nu[0]))
-print("Dark Matter                : %10.2E \t(%10.2E)" % (total_m[-1], eps_dm[0]))
+print("Cosmic Microwave Background: %10.2E, \t(%10.2E)" % (ea.standardmodel_postqcd[-1][4][0][-1], late.eps_cmb[0]))
+print("CMB Temp                   : %10.2E, \t(%10.2E)" % (ea.standardmodel_postqcd[-1][4][1][-1]*c.ev2K, late.t_cmb[0]))
+print("Primordial Neutrinos       : %10.2E \t(%10.2E)" % (ea.standardmodel_postqcd[-3][4][0][-1], late.eps_nu[0]))
+print("Neutrino Temp              : %10.2E \t(%10.2E)" % (ea.standardmodel_postqcd[-3][4][1][-1]*c.ev2K, late.t_nu[0]))
+print("Dark Matter                : %10.2E \t(%10.2E)" % (total_m[-1], late.eps_dm[0]))
 
 
 
 #%%
 
 #Significant features for plots
-strpeak_arg=np.argmax(abs(bh.strdot(hub)))
-lambdadom_arg=np.argmin(abs(eps-2*eps_l))
-zeq_arg=np.argmin(abs(a-1/(1+c.zeq)))
-zdec_arg=np.argmin(abs(a-1/(1+c.zdec)))
-zrec_arg=np.argmin(abs(a-1/(1+c.zrec)))
+strpeak_arg=np.argmax(abs(st.strdot(late.hub)))
+lambdadom_arg=np.argmin(abs(late.eps-2*late.eps_l))
+zeq_arg=np.argmin(abs(late.a-1/(1+c.zeq)))
+zdec_arg=np.argmin(abs(late.a-1/(1+c.zdec)))
+zrec_arg=np.argmin(abs(late.a-1/(1+c.zrec)))
 
 #use chemical potential formulae for hydrogen and helium only when going past redshift 20
 #write chemical potential as a function of number density nd temperature?
@@ -1148,7 +955,7 @@ for i in s_smbhmf:
     peaksdensity.append(np.log10(smmarray[massarg]))
 
 smbhfg, smbhax = plt.subplots(1,1)
-smbhax.scatter(np.log(a[1:]), peaksdensity)
+smbhax.scatter(np.log(late.a[1:]), peaksdensity)
 
 #more smbh
 ldapeak=2.5
@@ -1230,12 +1037,42 @@ def mdot(m):
 #     if np.isfinite(deta)==True:
 #         runeta+=deta
 
+#%%
+"""
+Save data to text files
+"""
+
+script_dir = os.path.dirname(__file__)
+results_dir = os.path.join(script_dir, 'results/')
+if not os.path.isdir(results_dir):
+    os.makedirs(results_dir)
+
+hentropy = h5py.File(results_dir+'result.hdf5', 'w')
+#hdfheader = hentropy.create_dataset('Header', data=[''])
+timegrp = hentropy.create_group("Time Measures")
+hdfa = timegrp.create_dataset('Scale Factor', data=np.array(totala), compression='gzip', maxshape=(None,))
+hdft = timegrp.create_dataset('Proper Time', data=np.array(totaltime), compression='gzip', maxshape=(None,))
+hdfz = timegrp.create_dataset('Redshift', data=np.array(1/totala-1), compression='gzip', maxshape=(None,))
+hdfeta = timegrp.create_dataset('Conformal Time', data=np.array(np.concatenate((early_eta,late.eta))), compression='gzip', maxshape=(None,))
+
+hdfceh = hentropy.create_dataset('S CEH', data=np.array(late.s_ceh), compression='gzip', maxshape=(None,))
+hdfceh.attrs['data']="Entropy, Energy, Temperature"
+hdfsmbh = hentropy.create_dataset('S SMBH', data=late.s_smbh, compression='gzip', maxshape=(None,))
+hdfbh = hentropy.create_dataset('S BH', data=late.s_bh, compression='gzip', maxshape=(None,))
+hdfcmb = hentropy.create_dataset('S CMB', data=late.s_cmb, compression='gzip', maxshape=(None,))
+hdfnu = hentropy.create_dataset('S Neutrinos', data=late.s_nu, compression='gzip', maxshape=(None,))
+hdfbm = hentropy.create_dataset('S Baryons', data=late.s_bm, compression='gzip', maxshape=(None,))
+hentropy.close()
+
+
+
+#%%
 
 print("Present Day Entropy:  S[k] from this code (Egan & Lineweaver 2009)")
 print("-------------------")
-print("Cosmic Event Horizon       : %10.2E \t(2.6E+122)" % (s_ceh[-1]*volumeceh[-1]/c.kb))
-print("Supermassive Black Holes   : %10.2E \t(1.2E+103)" % (s_smbh[-1]*volumeceh[-1]/c.kb))
-print("Stellar Mass Black Holes   : %10.2E \t(2.2E+96)" % (s_bh[-1]*volumeceh[-1]/c.kb))
-print("Cosmic Microwave Background: %10.2E \t(2.03E+88)" % (s_cmb[-1]*volumeceh[-1]/c.kb))
-print("Primordial Neutrinos       : %10.2E \t(1.93E+88)" % (s_nu[-1]*volumeceh[-1]/c.kb))
-print("Gas and Dust               : %10.2E \t(2.7E+80)" % (s_bm[-1]*volumeceh[-1]/c.kb))
+print("Cosmic Event Horizon       : %10.2E \t(2.6E+122)" % (late.s_ceh[-1]*late.volumeceh[-1]/c.kb))
+print("Supermassive Black Holes   : %10.2E \t(1.2E+103)" % (late.s_smbh[-1]*late.volumeceh[-1]/c.kb))
+print("Stellar Mass Black Holes   : %10.2E \t(2.2E+96)" % (late.s_bh[-1]*late.volumeceh[-1]/c.kb))
+print("Cosmic Microwave Background: %10.2E \t(2.03E+88)" % (late.s_cmb[-1]*late.volumeceh[-1]/c.kb))
+print("Primordial Neutrinos       : %10.2E \t(1.93E+88)" % (late.s_nu[-1]*late.volumeceh[-1]/c.kb))
+print("Gas and Dust               : %10.2E \t(2.7E+80)" % (late.s_bm[-1]*late.volumeceh[-1]/c.kb))
